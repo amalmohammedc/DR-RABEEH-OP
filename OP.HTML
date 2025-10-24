@@ -1,0 +1,913 @@
+import React, { useState, useEffect, useMemo } from 'react';
+
+// Import Firebase services
+// Make sure to install firebase: npm install firebase
+import { initializeApp } from 'firebase/app';
+import {
+  getAuth,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  onAuthStateChanged,
+  signInAnonymously,
+  signInWithCustomToken
+} from 'firebase/auth';
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  addDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  onSnapshot,
+  arrayUnion,
+  arrayRemove,
+  enableNetwork,
+  disableNetwork,
+  setLogLevel
+} from 'firebase/firestore';
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject
+} from 'firebase/storage';
+
+// --- Firebase Configuration ---
+// IMPORTANT: Replace with your own Firebase project config
+// You can get this from your Firebase project settings
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_STORAGE_BUCKET",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+// --- App-Specific Constants (from instructions) ---
+// These are placeholders for the Canvas environment
+const globalAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-clinic-app';
+const globalFirebaseConfig = typeof __firebase_config !== 'undefined'
+  ? JSON.parse(__firebase_config)
+  : firebaseConfig; // Fallback to manual config
+const globalInitialToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+// Initialize Firebase
+const app = initializeApp(globalFirebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+setLogLevel('Debug'); // Enable Firestore logging
+
+// --- Utility Functions ---
+const getTodayDateString = () => {
+  return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+};
+
+/**
+ * Main App Component
+ * Handles Auth and Navigation
+ */
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [page, setPage] = useState('home'); // 'home', 'newOP'
+  const [modal, setModal] = useState(null); // null, 'alreadyRegistered'
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Get current User ID, falling back to a random ID for unauthenticated (though we force auth)
+  const userId = user?.uid;
+
+  // Effect for Authentication
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setUser(user);
+      } else {
+        // No user found, try to sign in
+        try {
+          if (globalInitialToken) {
+            await signInWithCustomToken(auth, globalInitialToken);
+          } else {
+            // Fallback to anonymous sign-in if no token is provided
+            await signInAnonymously(auth);
+          }
+        } catch (authError) {
+          console.error("Error during initial sign-in:", authError);
+          setError("Could not authenticate. Please refresh.");
+        }
+      }
+      setIsAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Effect for Online/Offline status
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      enableNetwork(db).catch(err => console.error("Error enabling network:", err));
+      setError(null);
+    };
+    const handleOffline = () => {
+      setIsOffline(true);
+      setError("You are offline. Data will sync when you reconnect.");
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial check
+    if (isOffline) {
+      handleOffline();
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [isOffline]);
+
+
+  const handleGoogleLogin = async () => {
+    const provider = new GoogleAuthProvider();
+    setLoading(true);
+    setError(null);
+    try {
+      await signInWithPopup(auth, provider);
+      // onAuthStateChanged will handle setting the user
+    } catch (err) {
+      console.error(err);
+      setError("Failed to log in with Google.");
+    }
+    setLoading(false);
+  };
+
+  const handleLogout = async () => {
+    setLoading(true);
+    try {
+      await signOut(auth);
+      setUser(null); // Clear user
+      setPage('home'); // Reset page
+      // Re-authenticate anonymously
+      await signInAnonymously(auth);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to log out.");
+    }
+    setLoading(false);
+  };
+
+  // Helper to get Firestore paths scoped to the user
+  const getCollectionPath = (collectionName) => {
+    if (!userId) throw new Error("User not authenticated.");
+    return `artifacts/${globalAppId}/users/${userId}/${collectionName}`;
+  };
+
+  const getDocPath = (collectionName, docId) => {
+    if (!userId) throw new Error("User not authenticated.");
+    return `artifacts/${globalAppId}/users/${userId}/${collectionName}/${docId}`;
+  };
+  
+  // Helper to get Storage paths scoped to the user
+  const getStorageBasePath = () => {
+     if (!userId) throw new Error("User not authenticated.");
+     return `prescriptions/${userId}`;
+  }
+
+  if (!isAuthReady || loading) {
+    return <FullScreenLoader />;
+  }
+
+  return (
+    <div className="flex justify-center min-h-screen bg-gray-100 font-inter">
+      <div className="w-full max-w-lg bg-white shadow-xl">
+        {/* Header */}
+        <header className="sticky top-0 z-10 p-4 bg-blue-600 text-white shadow-md">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-bold">ClinicApp</h1>
+            {isOffline && (
+              <div className="flex items-center px-2 py-1 text-xs font-semibold text-yellow-900 bg-yellow-300 rounded-full">
+                <WifiOffIcon />
+                <span className="ml-1">Offline</span>
+              </div>
+            )}
+            {user && (
+              <div className="flex items-center">
+                {user.isAnonymous ? (
+                  <button
+                    onClick={handleGoogleLogin}
+                    className="flex items-center px-3 py-1 text-sm font-medium text-blue-700 bg-white rounded-md shadow-sm hover:bg-gray-50"
+                  >
+                    <GoogleIcon />
+                    <span className="ml-2">Log In</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center">
+                    <img
+                      src={user.photoURL || `https://placehold.co/32x32/EBF4FF/76A9FA?text=${user.email?.[0] || 'U'}`}
+                      alt="User"
+                      className="w-8 h-8 rounded-full"
+                    />
+                    <button
+                      onClick={handleLogout}
+                      className="ml-2 text-sm font-medium text-blue-100 hover:text-white"
+                    >
+                      Log Out
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {error && <div className="p-2 mt-2 text-center text-red-800 bg-red-100 rounded-md">{error}</div>}
+        </header>
+
+        {/* Main Content */}
+        <main className="p-4 pb-20">
+          {!user ? (
+            <AuthGate onLogin={handleGoogleLogin} loading={loading} />
+          ) : page === 'home' ? (
+            <HomePage
+              setPage={setPage}
+              setModal={setModal}
+              getCollectionPath={getCollectionPath}
+              getStorageBasePath={getStorageBasePath}
+              setError={setError}
+            />
+          ) : page === 'newOP' ? (
+            <NewPatientForm
+              setPage={setPage}
+              getCollectionPath={getCollectionPath}
+              getDocPath={getDocPath}
+              setError={setError}
+            />
+          ) : null}
+        </main>
+        
+        {/* Modals */}
+        {modal === 'alreadyRegistered' && (
+          <AlreadyRegisteredModal
+            setModal={setModal}
+            getCollectionPath={getCollectionPath}
+            getDocPath={getDocPath}
+            setError={setError}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * AuthGate: Shown when user is not logged in.
+ * Note: App logic forces anonymous login, so this is a fallback / initial login.
+ */
+function AuthGate({ onLogin, loading }) {
+  return (
+    <div className="flex flex-col items-center justify-center p-10 text-center">
+      <h2 className="text-2xl font-semibold text-gray-800">Welcome to ClinicApp</h2>
+      <p className="mt-2 text-gray-600">Please log in to manage your patient data.</p>
+      <button
+        onClick={onLogin}
+        disabled={loading}
+        className="flex items-center justify-center px-6 py-3 mt-6 font-medium text-white bg-blue-600 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50"
+      >
+        <GoogleIcon />
+        <span className="ml-2">{loading ? 'Logging in...' : 'Log In with Google'}</span>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * HomePage: Main dashboard
+ */
+function HomePage({ setPage, setModal, getCollectionPath, getStorageBasePath, setError }) {
+  const [todaysVisits, setTodaysVisits] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    let unsubscribe;
+    try {
+      const today = getTodayDateString();
+      const visitsPath = getCollectionPath('visits');
+      const q = query(collection(db, visitsPath), where('date', '==', today));
+
+      unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const visits = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+          setTodaysVisits(visits);
+          setLoading(false);
+        },
+        (err) => {
+          console.error("Error fetching today's visits:", err);
+          setError("Could not fetch today's patient list. Check connection.");
+          setLoading(false);
+        }
+      );
+    } catch (err) {
+        console.error(err);
+        setError("You must be logged in to see patient data.");
+        setLoading(false);
+    }
+
+    return () => unsubscribe && unsubscribe();
+  }, [getCollectionPath, setError]);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4">
+        <button
+          onClick={() => setPage('newOP')}
+          className="p-4 font-semibold text-white bg-green-500 rounded-lg shadow-md hover:bg-green-600"
+        >
+          New OP Registration
+        </button>
+        <button
+          onClick={() => setModal('alreadyRegistered')}
+          className="p-4 font-semibold text-white bg-blue-500 rounded-lg shadow-md hover:bg-blue-600"
+        >
+          Already Registered
+        </button>
+      </div>
+
+      <div>
+        <h2 className="text-xl font-bold text-gray-800">Today's Registered Patients List</h2>
+        {loading ? (
+          <p className="mt-4 text-gray-500">Loading patients...</p>
+        ) : todaysVisits.length === 0 ? (
+          <p className="mt-4 text-gray-500">No patients registered yet today.</p>
+        ) : (
+          <div className="mt-4 space-y-4">
+            {todaysVisits.map((visit) => (
+              <PatientCard 
+                key={visit.id} 
+                visit={visit} 
+                getStorageBasePath={getStorageBasePath} 
+                setError={setError}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * PatientCard: Displays info for a single patient visit
+ */
+function PatientCard({ visit, getStorageBasePath, setError }) {
+  const [prescriptions, setPrescriptions] = useState(visit.prescriptions || []);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = React.useRef(null);
+
+  // Update prescriptions if visit prop changes (e.g., from an upload)
+  useEffect(() => {
+    setPrescriptions(visit.prescriptions || []);
+  }, [visit.prescriptions]);
+
+  const handleUploadClick = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setError(null);
+    try {
+      // Create storage ref
+      const storagePath = `${getStorageBasePath()}/${visit.patientPhoneNumber}/${visit.id}/${Date.now()}_${file.name}`;
+      const storageRef = ref(storage, storagePath);
+
+      // Upload file
+      const snapshot = await uploadBytes(storageRef, file);
+      
+      // Get download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+
+      // Create prescription object
+      const newPrescription = {
+        fullPath: snapshot.ref.fullPath,
+        downloadURL: downloadURL,
+        fileName: file.name,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      // Update Firestore document
+      const visitDocRef = doc(db, visit.path.split('/').slice(0, -2).join('/'), 'visits', visit.id);
+      await updateDoc(visitDocRef, {
+        prescriptions: arrayUnion(newPrescription),
+      });
+      
+      // State is updated via onSnapshot listener in parent
+      // but we can add it here for immediate UI feedback
+      setPrescriptions(prev => [...prev, newPrescription]);
+
+    } catch (err) {
+      console.error("Error uploading file:", err);
+      setError("Failed to upload prescription. Please try again.");
+    }
+    setIsUploading(false);
+  };
+
+  const handleDeleteImage = async (prescriptionToDelete) => {
+    if (!window.confirm("Are you sure you want to delete this prescription image?")) {
+      return;
+    }
+    
+    setError(null);
+    try {
+      // 1. Delete from Storage
+      const imageRef = ref(storage, prescriptionToDelete.fullPath);
+      await deleteObject(imageRef);
+
+      // 2. Delete from Firestore
+      const visitDocRef = doc(db, visit.path.split('/').slice(0, -2).join('/'), 'visits', visit.id);
+      await updateDoc(visitDocRef, {
+        prescriptions: arrayRemove(prescriptionToDelete),
+      });
+
+      // State is updated via onSnapshot listener in parent
+      // but we can remove it here for immediate UI feedback
+      setPrescriptions(prev => prev.filter(p => p.fullPath !== prescriptionToDelete.fullPath));
+      
+    } catch (err) {
+        console.error("Error deleting image:", err);
+        setError("Failed to delete image. Please try again.");
+    }
+  };
+
+  return (
+    <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-md">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+        <InfoItem label="Name" value={visit.patientName} />
+        <InfoItem label="Age" value={visit.patientAge} />
+        <InfoItem label="Phone" value={visit.patientPhoneNumber} />
+        <InfoItem label="Place" value={visit.patientPlace} />
+        <InfoItem label="Time" value={visit.time || 'N/A'} isFullWidth={true} />
+      </div>
+
+      {/* Prescription Gallery */}
+      <div className="mt-4">
+        <h4 className="font-semibold text-gray-700">Prescriptions:</h4>
+        {prescriptions.length === 0 ? (
+          <p className="text-sm text-gray-500">No prescriptions uploaded.</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 mt-2">
+            {prescriptions.map((img) => (
+              <div key={img.fullPath} className="relative group">
+                <a href={img.downloadURL} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={img.downloadURL}
+                    alt={img.fileName}
+                    className="object-cover w-full h-24 bg-gray-200 rounded-md"
+                    onError={(e) => { e.target.src = 'https://placehold.co/100x100/FEE2E2/B91C1C?text=Error'; }}
+                  />
+                </a>
+                <button
+                  onClick={() => handleDeleteImage(img)}
+                  className="absolute top-0 right-0 p-1 text-white bg-red-600 rounded-full shadow-md opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  style={{ transform: 'translate(30%, -30%)' }}
+                >
+                  <CloseIcon />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      
+      {/* Upload Button */}
+      <div className="mt-4">
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+          disabled={isUploading}
+        />
+        <button
+          onClick={handleUploadClick}
+          disabled={isUploading}
+          className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md shadow-sm hover:bg-blue-600 disabled:opacity-50"
+        >
+          {isUploading ? <SpinnerIcon /> : <CameraIcon />}
+          <span className="ml-2">{isUploading ? 'Uploading...' : 'Upload Prescription'}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * NewPatientForm: Page for registering a new OP
+ */
+function NewPatientForm({ setPage, getCollectionPath, getDocPath, setError }) {
+  const [formData, setFormData] = useState({
+    name: '',
+    age: '',
+    phone: '',
+    place: '',
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.name || !formData.phone) {
+      setError("Name and Phone Number are required.");
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const { name, age, phone, place } = formData;
+      const patientData = {
+        name,
+        age: Number(age) || null,
+        phone,
+        place,
+        updatedAt: new Date().toISOString(),
+      };
+      
+      // 1. Create or update the Patient profile
+      const patientPath = getDocPath('patients', phone);
+      await setDoc(doc(db, patientPath), patientData, { merge: true });
+
+      // 2. Create a new Visit record
+      const today = getTodayDateString();
+      const visitData = {
+        date: today,
+        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        patientPhoneNumber: phone,
+        patientName: name,
+        patientAge: Number(age) || null,
+        patientPlace: place,
+        prescriptions: [],
+        path: patientPath // Store path for easier reference
+      };
+      
+      const visitsPath = getCollectionPath('visits');
+      await addDoc(collection(db, visitsPath), visitData);
+
+      // Success
+      setFormData({ name: '', age: '', phone: '', place: '' }); // Clear form
+      setPage('home'); // Go back home
+
+    } catch (err) {
+      console.error("Error saving patient:", err);
+      setError("Failed to save patient. Please try again.");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="animate-slideIn">
+      <div className="flex items-center mb-4">
+        <button onClick={() => setPage('home')} className="p-2 text-gray-700 hover:text-gray-900">
+          <ArrowLeftIcon />
+        </button>
+        <h2 className="ml-2 text-xl font-bold text-gray-800">New OP Registration</h2>
+      </div>
+      <form onSubmit={handleSubmit} className="p-4 space-y-4 bg-white border border-gray-200 rounded-lg shadow-md">
+        <FormInput name="name" label="Name" value={formData.name} onChange={handleChange} required />
+        <FormInput name="age" label="Age" type="number" value={formData.age} onChange={handleChange} />
+        <FormInput name="phone" label="Phone Number" type="tel" value={formData.phone} onChange={handleChange} required />
+        <FormInput name="place" label="House Name or Place" value={formData.place} onChange={handleChange} />
+        
+        <div className="flex justify-end pt-2">
+          <button
+            type="button"
+            onClick={() => setPage('home')}
+            className="px-4 py-2 mr-2 font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="flex items-center justify-center px-4 py-2 font-medium text-white bg-green-500 rounded-md shadow-sm hover:bg-green-600 disabled:opacity-50"
+            disabled={loading}
+          >
+            {loading ? <SpinnerIcon /> : <SaveIcon />}
+            <span className="ml-2">{loading ? 'Saving...' : 'Save Patient'}</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/**
+ * AlreadyRegisteredModal: Popup to search for a patient
+ */
+function AlreadyRegisteredModal({ setModal, getCollectionPath, getDocPath, setError }) {
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [patientData, setPatientData] = useState(null);
+  const [visitHistory, setVisitHistory] = useState([]);
+  const [notFound, setNotFound] = useState(false);
+  
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!phone) return;
+    
+    setLoading(true);
+    setError(null);
+    setPatientData(null);
+    setVisitHistory([]);
+    setNotFound(false);
+    
+    try {
+      // 1. Get patient profile
+      const patientPath = getDocPath('patients', phone);
+      const patientDoc = await getDoc(doc(db, patientPath));
+      
+      if (!patientDoc.exists()) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+      
+      const patient = { id: patientDoc.id, ...patientDoc.data() };
+      setPatientData(patient);
+      
+      // 2. Get visit history
+      const visitsPath = getCollectionPath('visits');
+      const q = query(collection(db, visitsPath), where('patientPhoneNumber', '==', phone));
+      const visitsSnapshot = await getDocs(q);
+      
+      const visits = visitsSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
+        
+      setVisitHistory(visits);
+      
+    } catch (err) {
+      console.error("Error searching patient:", err);
+      setError("Failed to search. Please try again.");
+    }
+    setLoading(false);
+  };
+  
+  const handleGenerateNewOP = async () => {
+    if (!patientData) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const { name, age, phone, place } = patientData;
+      
+      // Create a new Visit record
+      const today = getTodayDateString();
+      const visitData = {
+        date: today,
+        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        patientPhoneNumber: phone,
+        patientName: name,
+        patientAge: age,
+        patientPlace: place,
+        prescriptions: [],
+        path: getDocPath('patients', phone) // Store path for reference
+      };
+      
+      const visitsPath = getCollectionPath('visits');
+      await addDoc(collection(db, visitsPath), visitData);
+
+      // Success
+      setModal(null); // Close modal
+      
+    } catch (err) {
+      console.error("Error creating new OP:", err);
+      setError("Failed to create new visit. Please try again.");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-start justify-center p-4 pt-16 bg-black bg-opacity-50 backdrop-blur-sm">
+      <div className="relative w-full max-w-lg max-h-[80vh] overflow-y-auto bg-white rounded-lg shadow-2xl animate-slideIn">
+        <button
+          onClick={() => setModal(null)}
+          className="absolute top-2 right-2 p-2 text-gray-500 rounded-full hover:bg-gray-100 hover:text-gray-800"
+        >
+          <CloseIcon />
+        </button>
+        
+        <div className="p-6">
+          <h3 className="text-lg font-bold text-gray-800">Find Registered Patient</h3>
+          <form onSubmit={handleSearch} className="flex mt-4 space-x-2">
+            <FormInput
+              name="phone"
+              label="Patient Phone Number"
+              isLabelHidden={true}
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Enter phone number..."
+              required
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex items-center justify-center px-4 py-2 font-medium text-white bg-blue-500 rounded-md shadow-sm hover:bg-blue-600 disabled:opacity-50"
+            >
+              {loading ? <SpinnerIcon /> : <SearchIcon />}
+              <span className="ml-2">Search</span>
+            </button>
+          </form>
+          
+          {/* Search Results */}
+          <div className="mt-6">
+            {notFound && (
+              <p className="text-center text-gray-600">No patient found with this phone number.</p>
+            )}
+            {patientData && (
+              <div className="p-4 space-y-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between">
+                   <div>
+                      <h4 className="text-xl font-bold">{patientData.name}</h4>
+                      <p className="text-gray-600">{patientData.phone} | Age: {patientData.age} | {patientData.place}</p>
+                   </div>
+                   <button
+                    onClick={handleGenerateNewOP}
+                    disabled={loading}
+                    className="flex-shrink-0 px-3 py-2 text-sm font-medium text-white bg-green-500 rounded-md shadow-sm hover:bg-green-600 disabled:opacity-50"
+                   >
+                     Generate New OP
+                   </button>
+                </div>
+                
+                <h5 className="font-semibold text-gray-800 border-t pt-4">Visit History</h5>
+                {visitHistory.length === 0 ? (
+                  <p className="text-gray-500">No visit history found.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {visitHistory.map(visit => (
+                       <PatientCard 
+                          key={visit.id} 
+                          visit={visit} 
+                          getStorageBasePath={() => `prescriptions/${auth.currentUser.uid}`}
+                          setError={setError}
+                        />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// --- Reusable UI Components ---
+
+function InfoItem({ label, value, isFullWidth = false }) {
+  return (
+    <div className={isFullWidth ? 'col-span-2' : ''}>
+      <span className="block text-xs font-medium text-gray-500">{label}</span>
+      <span className="block text-sm font-semibold text-gray-800">{value || 'N/A'}</span>
+    </div>
+  );
+}
+
+function FormInput({ label, name, type = 'text', value, onChange, required = false, placeholder, isLabelHidden = false }) {
+  return (
+    <div className="w-full">
+      <label
+        htmlFor={name}
+        className={`block text-sm font-medium text-gray-700 ${isLabelHidden ? 'sr-only' : 'mb-1'}`}
+      >
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <input
+        type={type}
+        id={name}
+        name={name}
+        value={value}
+        onChange={onChange}
+        required={required}
+        placeholder={placeholder || `Enter ${label.toLowerCase()}...`}
+        className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+      />
+    </div>
+  );
+}
+
+function FullScreenLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <div className="flex flex-col items-center">
+        <SpinnerIcon />
+        <p className="mt-2 text-gray-600">Loading ClinicApp...</p>
+      </div>
+    </div>
+  );
+}
+
+// --- SVG Icons ---
+
+const GoogleIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 48 48">
+    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+    <path fill="none" d="M0 0h48v48H0z"></path>
+  </svg>
+);
+
+const WifiOffIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m-2.828-2.828a5 5 0 010 7.07m-2.829-2.828a1 1 0 010 1.414m-8.485 2.829l14.142-14.142M4.929 4.929l14.142 14.142"></path>
+  </svg>
+);
+
+const CameraIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"></path>
+  </svg>
+);
+
+const SpinnerIcon = () => (
+  <svg className="w-5 h-5 text-white animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+);
+
+const ArrowLeftIcon = () => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+  </svg>
+);
+
+const SaveIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+  </svg>
+);
+
+const SearchIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+  </svg>
+);
+
+// Add Tailwind CSS animations
+const style = document.createElement('style');
+style.textContent = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  .font-inter { font-family: 'Inter', sans-serif; }
+  
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-slideIn {
+    animation: slideIn 0.3s ease-out forwards;
+  }
+`;
+document.head.appendChild(style);
