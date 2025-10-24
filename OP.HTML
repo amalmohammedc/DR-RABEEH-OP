@@ -188,12 +188,12 @@ export default function App() {
   }
 
   return (
-    <div className="flex justify-center min-h-screen bg-gray-100 font-inter">
-      <div className="w-full max-w-lg bg-white shadow-xl">
+    <div className="flex justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 font-inter">
+      <div className="w-full max-w-lg bg-white/90 backdrop-blur-sm shadow-2xl overflow-hidden md:rounded-lg">
         {/* Header */}
-        <header className="sticky top-0 z-10 p-4 bg-blue-600 text-white shadow-md">
+        <header className="sticky top-0 z-10 p-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-md">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold">ClinicApp</h1>
+            <h1 className="text-2xl font-bold tracking-tight">ClinicApp</h1>
             {isOffline && (
               <div className="flex items-center px-2 py-1 text-xs font-semibold text-yellow-900 bg-yellow-300 rounded-full">
                 <WifiOffIcon />
@@ -232,7 +232,7 @@ export default function App() {
         </header>
 
         {/* Main Content */}
-        <main className="p-4 pb-20">
+        <main className="p-6 pb-20">
           {!user ? (
             <AuthGate onLogin={handleGoogleLogin} loading={loading} />
           ) : page === 'home' ? (
@@ -279,7 +279,7 @@ function AuthGate({ onLogin, loading }) {
       <button
         onClick={onLogin}
         disabled={loading}
-        className="flex items-center justify-center px-6 py-3 mt-6 font-medium text-white bg-blue-600 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50"
+        className="flex items-center justify-center px-6 py-3 mt-6 font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow-lg hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50 transition-all transform hover:scale-105"
       >
         <GoogleIcon />
         <span className="ml-2">{loading ? 'Logging in...' : 'Log In with Google'}</span>
@@ -333,24 +333,27 @@ function HomePage({ setPage, setModal, getCollectionPath, getStorageBasePath, se
       <div className="grid grid-cols-2 gap-4">
         <button
           onClick={() => setPage('newOP')}
-          className="p-4 font-semibold text-white bg-green-500 rounded-lg shadow-md hover:bg-green-600"
+          className="p-4 font-semibold text-white bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl shadow-lg transition-all transform hover:scale-105 hover:shadow-xl"
         >
           New OP Registration
         </button>
         <button
           onClick={() => setModal('alreadyRegistered')}
-          className="p-4 font-semibold text-white bg-blue-500 rounded-lg shadow-md hover:bg-blue-600"
+          className="p-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl shadow-lg transition-all transform hover:scale-105 hover:shadow-xl"
         >
           Already Registered
         </button>
       </div>
 
       <div>
-        <h2 className="text-xl font-bold text-gray-800">Today's Registered Patients List</h2>
+        <h2 className="pb-2 text-2xl font-bold text-gray-800 border-b-2 border-blue-100">Today's Registered Patients List</h2>
         {loading ? (
-          <p className="mt-4 text-gray-500">Loading patients...</p>
+          <div className="mt-4 space-y-4">
+            <div className="w-full h-32 p-4 bg-gray-100 rounded-lg shadow-inner animate-pulse-light"></div>
+            <div className="w-full h-32 p-4 bg-gray-100 rounded-lg shadow-inner animate-pulse-light"></div>
+          </div>
         ) : todaysVisits.length === 0 ? (
-          <p className="mt-4 text-gray-500">No patients registered yet today.</p>
+          <p className="p-6 mt-4 text-center text-gray-600 bg-gray-50 rounded-lg">No patients registered yet today.</p>
         ) : (
           <div className="mt-4 space-y-4">
             {todaysVisits.map((visit) => (
@@ -455,7 +458,7 @@ function PatientCard({ visit, getStorageBasePath, setError }) {
   };
 
   return (
-    <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-md">
+    <div className="p-4 bg-white border border-blue-100 rounded-xl shadow-lg transition-all hover:shadow-xl">
       <div className="grid grid-cols-2 gap-x-4 gap-y-2">
         <InfoItem label="Name" value={visit.patientName} />
         <InfoItem label="Age" value={visit.patientAge} />
@@ -466,24 +469,24 @@ function PatientCard({ visit, getStorageBasePath, setError }) {
 
       {/* Prescription Gallery */}
       <div className="mt-4">
-        <h4 className="font-semibold text-gray-700">Prescriptions:</h4>
+        <h4 className="text-lg font-semibold text-blue-800">Prescriptions:</h4>
         {prescriptions.length === 0 ? (
           <p className="text-sm text-gray-500">No prescriptions uploaded.</p>
         ) : (
           <div className="grid grid-cols-3 gap-2 mt-2">
             {prescriptions.map((img) => (
-              <div key={img.fullPath} className="relative group">
+              <div key={img.fullPath} className="relative overflow-hidden rounded-lg shadow-md group">
                 <a href={img.downloadURL} target="_blank" rel="noopener noreferrer">
                   <img
                     src={img.downloadURL}
                     alt={img.fileName}
-                    className="object-cover w-full h-24 bg-gray-200 rounded-md"
+                    className="object-cover w-full h-24 bg-gray-200 rounded-lg transition-transform duration-300 group-hover:scale-110"
                     onError={(e) => { e.target.src = 'https://placehold.co/100x100/FEE2E2/B91C1C?text=Error'; }}
                   />
                 </a>
                 <button
                   onClick={() => handleDeleteImage(img)}
-                  className="absolute top-0 right-0 p-1 text-white bg-red-600 rounded-full shadow-md opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  className="absolute top-0 right-0 p-1 text-white bg-red-600/80 backdrop-blur-sm rounded-full shadow-md opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all"
                   style={{ transform: 'translate(30%, -30%)' }}
                 >
                   <CloseIcon />
@@ -508,9 +511,9 @@ function PatientCard({ visit, getStorageBasePath, setError }) {
         <button
           onClick={handleUploadClick}
           disabled={isUploading}
-          className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md shadow-sm hover:bg-blue-600 disabled:opacity-50"
+          className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-md shadow-md hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 transition-all transform hover:scale-105"
         >
-          {isUploading ? <SpinnerIcon /> : <CameraIcon />}
+          {isUploading ? <SpinnerIcon className="w-5 h-5 text-white" /> : <CameraIcon />}
           <span className="ml-2">{isUploading ? 'Uploading...' : 'Upload Prescription'}</span>
         </button>
       </div>
@@ -589,12 +592,12 @@ function NewPatientForm({ setPage, getCollectionPath, getDocPath, setError }) {
   return (
     <div className="animate-slideIn">
       <div className="flex items-center mb-4">
-        <button onClick={() => setPage('home')} className="p-2 text-gray-700 hover:text-gray-900">
+        <button onClick={() => setPage('home')} className="p-2 text-gray-700 rounded-full hover:bg-gray-100 hover:text-gray-900">
           <ArrowLeftIcon />
         </button>
-        <h2 className="ml-2 text-xl font-bold text-gray-800">New OP Registration</h2>
+        <h2 className="ml-2 text-2xl font-bold text-gray-800">New OP Registration</h2>
       </div>
-      <form onSubmit={handleSubmit} className="p-4 space-y-4 bg-white border border-gray-200 rounded-lg shadow-md">
+      <form onSubmit={handleSubmit} className="p-6 space-y-4 bg-white border border-gray-200 rounded-xl shadow-xl">
         <FormInput name="name" label="Name" value={formData.name} onChange={handleChange} required />
         <FormInput name="age" label="Age" type="number" value={formData.age} onChange={handleChange} />
         <FormInput name="phone" label="Phone Number" type="tel" value={formData.phone} onChange={handleChange} required />
@@ -604,17 +607,17 @@ function NewPatientForm({ setPage, getCollectionPath, getDocPath, setError }) {
           <button
             type="button"
             onClick={() => setPage('home')}
-            className="px-4 py-2 mr-2 font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+            className="px-5 py-2 mr-2 font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-all"
             disabled={loading}
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="flex items-center justify-center px-4 py-2 font-medium text-white bg-green-500 rounded-md shadow-sm hover:bg-green-600 disabled:opacity-50"
+            className="flex items-center justify-center px-5 py-2 font-medium text-white bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg shadow-md hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 transition-all transform hover:scale-105"
             disabled={loading}
           >
-            {loading ? <SpinnerIcon /> : <SaveIcon />}
+            {loading ? <SpinnerIcon className="w-5 h-5 text-white" /> : <SaveIcon />}
             <span className="ml-2">{loading ? 'Saving...' : 'Save Patient'}</span>
           </button>
         </div>
@@ -712,7 +715,7 @@ function AlreadyRegisteredModal({ setModal, getCollectionPath, getDocPath, setEr
 
   return (
     <div className="fixed inset-0 z-20 flex items-start justify-center p-4 pt-16 bg-black bg-opacity-50 backdrop-blur-sm">
-      <div className="relative w-full max-w-lg max-h-[80vh] overflow-y-auto bg-white rounded-lg shadow-2xl animate-slideIn">
+      <div className="relative w-full max-w-lg max-h-[80vh] overflow-y-auto bg-white rounded-xl shadow-2xl animate-slideIn">
         <button
           onClick={() => setModal(null)}
           className="absolute top-2 right-2 p-2 text-gray-500 rounded-full hover:bg-gray-100 hover:text-gray-800"
@@ -721,7 +724,7 @@ function AlreadyRegisteredModal({ setModal, getCollectionPath, getDocPath, setEr
         </button>
         
         <div className="p-6">
-          <h3 className="text-lg font-bold text-gray-800">Find Registered Patient</h3>
+          <h3 className="text-xl font-bold text-blue-900">Find Registered Patient</h3>
           <form onSubmit={handleSearch} className="flex mt-4 space-x-2">
             <FormInput
               name="phone"
@@ -736,9 +739,9 @@ function AlreadyRegisteredModal({ setModal, getCollectionPath, getDocPath, setEr
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center justify-center px-4 py-2 font-medium text-white bg-blue-500 rounded-md shadow-sm hover:bg-blue-600 disabled:opacity-50"
+              className="flex items-center justify-center px-4 py-2 font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 rounded-md shadow-md hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 transition-all transform hover:scale-105"
             >
-              {loading ? <SpinnerIcon /> : <SearchIcon />}
+              {loading ? <SpinnerIcon className="w-5 h-5 text-white" /> : <SearchIcon />}
               <span className="ml-2">Search</span>
             </button>
           </form>
@@ -746,25 +749,25 @@ function AlreadyRegisteredModal({ setModal, getCollectionPath, getDocPath, setEr
           {/* Search Results */}
           <div className="mt-6">
             {notFound && (
-              <p className="text-center text-gray-600">No patient found with this phone number.</p>
+              <p className="p-6 text-center text-gray-600 bg-gray-100 rounded-lg">No patient found with this phone number.</p>
             )}
             {patientData && (
-              <div className="p-4 space-y-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center justify-between">
+              <div className="p-4 space-y-4 bg-gradient-to-br from-blue-50 to-white rounded-lg shadow-inner">
+                <div className="flex flex-wrap items-center justify-between gap-4">
                    <div>
-                      <h4 className="text-xl font-bold">{patientData.name}</h4>
+                      <h4 className="text-xl font-bold text-blue-900">{patientData.name}</h4>
                       <p className="text-gray-600">{patientData.phone} | Age: {patientData.age} | {patientData.place}</p>
                    </div>
                    <button
                     onClick={handleGenerateNewOP}
                     disabled={loading}
-                    className="flex-shrink-0 px-3 py-2 text-sm font-medium text-white bg-green-500 rounded-md shadow-sm hover:bg-green-600 disabled:opacity-50"
+                    className="flex-shrink-0 px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-500 to-emerald-600 rounded-md shadow-md hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 transition-all transform hover:scale-105"
                    >
                      Generate New OP
                    </button>
                 </div>
                 
-                <h5 className="font-semibold text-gray-800 border-t pt-4">Visit History</h5>
+                <h5 className="w-full pt-4 text-lg font-semibold text-blue-800 border-t-2 border-blue-100">Visit History</h5>
                 {visitHistory.length === 0 ? (
                   <p className="text-gray-500">No visit history found.</p>
                 ) : (
@@ -817,7 +820,7 @@ function FormInput({ label, name, type = 'text', value, onChange, required = fal
         onChange={onChange}
         required={required}
         placeholder={placeholder || `Enter ${label.toLowerCase()}...`}
-        className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+        className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-150 focus:shadow-md"
       />
     </div>
   );
@@ -827,7 +830,7 @@ function FullScreenLoader() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="flex flex-col items-center">
-        <SpinnerIcon />
+        <SpinnerIcon className="w-10 h-10 text-blue-600" />
         <p className="mt-2 text-gray-600">Loading ClinicApp...</p>
       </div>
     </div>
@@ -865,8 +868,8 @@ const CloseIcon = () => (
   </svg>
 );
 
-const SpinnerIcon = () => (
-  <svg className="w-5 h-5 text-white animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+const SpinnerIcon = ({ className = "w-5 h-5 text-white" }) => (
+  <svg className={`${className} animate-spin`} xmlns="http://www.w-3.0.org/2000/svg" fill="none" viewBox="0 0 24 24">
     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
   </svg>
@@ -909,5 +912,18 @@ style.textContent = `
   .animate-slideIn {
     animation: slideIn 0.3s ease-out forwards;
   }
+  
+  @keyframes pulse-light {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+  .animate-pulse-light {
+    animation: pulse-light 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
 `;
 document.head.appendChild(style);
+
