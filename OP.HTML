@@ -64,7 +64,8 @@
       arrayRemove,
       enableNetwork,
       disableNetwork,
-      setLogLevel
+      setLogLevel,
+      deleteDoc // <-- ADD deleteDoc
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import {
       getStorage,
@@ -78,24 +79,24 @@
     const { useState, useEffect, useMemo, useRef } = React;
 
     // --- Firebase Configuration ---
-    // IMPORTANT: Replace with your own Firebase project config
-    // You can get this from your Firebase project settings
+    // Using the config you provided
     const firebaseConfig = {
-  apiKey: "AIzaSyBIefo9p2idaCW7_LPutQd4egWfZLxTc2E",
-  authDomain: "dr-rabeeh.firebaseapp.com",
-  projectId: "dr-rabeeh",
-  storageBucket: "dr-rabeeh.firebasestorage.app",
-  messagingSenderId: "472228074027",
-  appId: "1:472228074027:web:89c1c324b05c4c0b94d06e",
-  measurementId: "G-V9Q9DCRJNY"
-};
+      apiKey: "AIzaSyBIefo9p2idaCW7_LPutQd4egWfZLxTc2E",
+      authDomain: "dr-rabeeh.firebaseapp.com",
+      projectId: "dr-rabeeh",
+      storageBucket: "dr-rabeeh.appspot.com", // Corrected storage bucket
+      messagingSenderId: "472228074027",
+      appId: "1:472228074027:web:89c1c324b05c4c0b94d06e",
+      measurementId: "G-V9Q9DCRJNY"
+    };
 
     // --- App-Specific Constants (from instructions) ---
     // These are placeholders for the Canvas environment
     const globalAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-clinic-app';
+    // Use the config from this file (firebaseConfig) as the primary source
     const globalFirebaseConfig = typeof __firebase_config !== 'undefined'
       ? JSON.parse(__firebase_config)
-      : firebaseConfig; // Fallback to manual config
+      : firebaseConfig; 
     const globalInitialToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
     // Initialize Firebase
@@ -109,6 +110,37 @@
     const getTodayDateString = () => {
       return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     };
+    
+    // --- NEW Clock Component ---
+    function Clock() {
+      const [time, setTime] = useState(new Date());
+
+      useEffect(() => {
+        const timerId = setInterval(() => {
+          setTime(new Date());
+        }, 1000); // Update every second
+
+        return () => clearInterval(timerId); // Cleanup
+      }, []);
+
+      const formattedDate = time.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+      const formattedTime = time.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+
+      return (
+        <div className="text-right text-blue-100">
+          <div className="text-sm font-medium">{formattedTime}</div>
+          <div className="text-xs">{formattedDate}</div>
+        </div>
+      );
+    }
 
     /**
      * Main App Component
@@ -268,6 +300,10 @@
                   </div>
                 )}
               </div>
+              {/* --- ADDED CLOCK --- */}
+              <div className="flex items-center justify-end mt-2">
+                 <Clock />
+              </div>
               {error && <div className="p-2 mt-2 text-center text-red-800 bg-red-100 rounded-md">{error}</div>}
             </header>
 
@@ -282,6 +318,7 @@
                   getCollectionPath={getCollectionPath}
                   getStorageBasePath={getStorageBasePath}
                   setError={setError}
+                  getDocPath={getDocPath} // <-- ADD THIS
                 />
               ) : page === 'newOP' ? (
                 <NewPatientForm
@@ -331,7 +368,7 @@
     /**
      * HomePage: Main dashboard
      */
-    function HomePage({ setPage, setModal, getCollectionPath, getStorageBasePath, setError }) {
+    function HomePage({ setPage, setModal, getCollectionPath, getStorageBasePath, setError, getDocPath }) { // <-- ADD getDocPath
       const [todaysVisits, setTodaysVisits] = useState([]);
       const [loading, setLoading] = useState(true);
 
@@ -402,6 +439,7 @@
                     visit={visit} 
                     getStorageBasePath={getStorageBasePath} 
                     setError={setError}
+                    getDocPath={getDocPath} // <-- ADD THIS
                   />
                 ))}
               </div>
@@ -414,7 +452,7 @@
     /**
      * PatientCard: Displays info for a single patient visit
      */
-    function PatientCard({ visit, getStorageBasePath, setError }) {
+    function PatientCard({ visit, getStorageBasePath, setError, getDocPath }) { // <-- ADD getDocPath
       const [prescriptions, setPrescriptions] = useState(visit.prescriptions || []);
       const [isUploading, setIsUploading] = useState(false);
       const fileInputRef = React.useRef(null);
@@ -500,14 +538,55 @@
         }
       };
 
+      const handleDeleteVisit = async () => {
+        // Use confirm for simplicity. Replace with a custom modal in a real app.
+        if (!confirm(`Are you sure you want to delete the visit for ${visit.patientName}? This will also delete all associated prescriptions and cannot be undone.`)) {
+          return;
+        }
+
+        setError(null);
+        try {
+          // 1. Delete all associated prescription images from Storage
+          if (visit.prescriptions && visit.prescriptions.length > 0) {
+            // Use Promise.all to delete all images in parallel
+            const deletePromises = visit.prescriptions.map(img => {
+              const imageRef = ref(storage, img.fullPath);
+              return deleteObject(imageRef);
+            });
+            await Promise.all(deletePromises);
+          }
+
+          // 2. Delete the visit document from Firestore
+          const visitDocRef = doc(db, getDocPath('visits', visit.id));
+          await deleteDoc(visitDocRef);
+          
+          // UI will update automatically from onSnapshot in HomePage
+
+        } catch (err) {
+          console.error("Error deleting visit:", err);
+          setError("Failed to delete visit. Please try again.");
+        }
+      };
+
       return (
-        <div className="p-4 bg-white border border-blue-100 rounded-xl shadow-lg transition-all hover:shadow-xl">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+        <div className="relative p-4 bg-white border border-blue-100 rounded-xl shadow-lg transition-all hover:shadow-xl">
+          {/* --- ADDED DELETE BUTTON --- */}
+          <button
+            onClick={handleDeleteVisit}
+            className="absolute top-2 right-2 p-1.5 text-gray-400 bg-gray-100 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors"
+            title="Delete Visit"
+          >
+            <TrashIcon />
+          </button>
+          
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 pr-8"> {/* Added pr-8 to avoid overlap */}
             <InfoItem label="Name" value={visit.patientName} />
             <InfoItem label="Age" value={visit.patientAge} />
             <InfoItem label="Phone" value={visit.patientPhoneNumber} />
             <InfoItem label="Place" value={visit.patientPlace} />
-            <InfoItem label="Time" value={visit.time || 'N/A'} isFullWidth={true} />
+            {/* --- ADDED DATE ITEM --- */}
+            <InfoItem label="Date" value={visit.date} />
+            <InfoItem label="Time" value={visit.time || 'N/A'} />
           </div>
 
           {/* Prescription Gallery */}
@@ -673,15 +752,18 @@
      * AlreadyRegisteredModal: Popup to search for a patient
      */
     function AlreadyRegisteredModal({ setModal, getCollectionPath, getDocPath, setError }) {
-      const [phone, setPhone] = useState('');
+      // --- MODIFIED: Renamed state ---
+      const [searchTerm, setSearchTerm] = useState('');
+      const [searchBy, setSearchBy] = useState('phone'); // 'phone' or 'name'
+      
       const [loading, setLoading] = useState(false);
-      const [patientData, setPatientData] = useState(null);
+      const [patientData, setPatientData] = useState(null); // Holds a single matched patient
       const [visitHistory, setVisitHistory] = useState([]);
       const [notFound, setNotFound] = useState(false);
       
       const handleSearch = async (e) => {
         e.preventDefault();
-        if (!phone) return;
+        if (!searchTerm) return;
         
         setLoading(true);
         setError(null);
@@ -690,29 +772,48 @@
         setNotFound(false);
         
         try {
-          // 1. Get patient profile
-          const patientPath = getDocPath('patients', phone);
-          const patientDoc = await getDoc(doc(db, patientPath));
-          
-          if (!patientDoc.exists()) {
-            setNotFound(true);
-            setLoading(false);
-            return;
-          }
-          
-          const patient = { id: patientDoc.id, ...patientDoc.data() };
-          setPatientData(patient);
-          
-          // 2. Get visit history
-          const visitsPath = getCollectionPath('visits');
-          const q = query(collection(db, visitsPath), where('patientPhoneNumber', '==', phone));
-          const visitsSnapshot = await getDocs(q);
-          
-          const visits = visitsSnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
+          let foundPatient = null;
+          let patientPhone = null;
+
+          if (searchBy === 'phone') {
+            // 1. Search by Phone (as document ID)
+            const patientPath = getDocPath('patients', searchTerm);
+            const patientDoc = await getDoc(doc(db, patientPath));
             
-          setVisitHistory(visits);
+            if (patientDoc.exists()) {
+              foundPatient = { id: patientDoc.id, ...patientDoc.data() };
+              patientPhone = foundPatient.phone;
+            }
+          } else {
+            // 2. Search by Name (exact match, takes first result)
+            const patientsPath = getCollectionPath('patients');
+            const q = query(collection(db, patientsPath), where('name', '==', searchTerm));
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+              const firstMatch = querySnapshot.docs[0];
+              foundPatient = { id: firstMatch.id, ...firstMatch.data() };
+              patientPhone = foundPatient.phone;
+            }
+          }
+
+          // 3. Process results
+          if (foundPatient && patientPhone) {
+            setPatientData(foundPatient);
+            
+            // Get visit history for the found patient's phone number
+            const visitsPath = getCollectionPath('visits');
+            const visitsQ = query(collection(db, visitsPath), where('patientPhoneNumber', '==', patientPhone));
+            const visitsSnapshot = await getDocs(visitsQ);
+            
+            const visits = visitsSnapshot.docs
+              .map(doc => ({ id: doc.id, ...doc.data() }))
+              .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
+              
+            setVisitHistory(visits);
+          } else {
+            setNotFound(true);
+          }
           
         } catch (err) {
           console.error("Error searching patient:", err);
@@ -768,15 +869,42 @@
             
             <div className="p-6">
               <h3 className="text-xl font-bold text-blue-900">Find Registered Patient</h3>
-              <form onSubmit={handleSearch} className="flex mt-4 space-x-2">
+              
+              {/* --- SEARCH TYPE TOGGLE --- */}
+              <div className="flex gap-4 my-4">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="searchType"
+                    value="phone"
+                    checked={searchBy === 'phone'}
+                    onChange={() => setSearchBy('phone')}
+                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">By Phone</span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="searchType"
+                    value="name"
+                    checked={searchBy === 'name'}
+                    onChange={() => setSearchBy('name')}
+                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">By Name (Exact)</span>
+                </label>
+              </div>
+
+              <form onSubmit={handleSearch} className="flex mt-2 space-x-2">
                 <FormInput
-                  name="phone"
-                  label="Patient Phone Number"
+                  name="search"
+                  label="Search Term"
                   isLabelHidden={true}
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Enter phone number..."
+                  type={searchBy === 'phone' ? 'tel' : 'text'}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={searchBy === 'phone' ? 'Enter phone number...' : 'Enter full name...'}
                   required
                 />
                 <button
@@ -792,7 +920,7 @@
               {/* Search Results */}
               <div className="mt-6">
                 {notFound && (
-                  <p className="p-6 text-center text-gray-600 bg-gray-100 rounded-lg">No patient found with this phone number.</p>
+                  <p className="p-6 text-center text-gray-600 bg-gray-100 rounded-lg">No patient found with this {searchBy}.</p>
                 )}
                 {patientData && (
                   <div className="p-4 space-y-4 bg-gradient-to-br from-blue-50 to-white rounded-lg shadow-inner">
@@ -912,7 +1040,7 @@
     );
 
     const SpinnerIcon = ({ className = "w-5 h-5 text-white" }) => (
-      <svg className={`${className} animate-spin`} xmlns="http://www.w3.org/2g0/svg" fill="none" viewBox="0 0 24 24">
+      <svg className={`${className} animate-spin`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
       </svg>
@@ -936,6 +1064,13 @@
       </svg>
     );
 
+    {/* --- ADDED TRASH ICON --- */}
+    const TrashIcon = () => (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+      </svg>
+    );
+
     // --- 5. Mount the App ---
     // This code finds the <div id="root"> and renders your <App /> component inside it.
     const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -944,4 +1079,5 @@
   </script>
 </body>
 </html>
+
 
