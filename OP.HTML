@@ -144,10 +144,168 @@
       );
     }
 
+    // --- Reusable UI Components (MOVED UP) ---
+
+    function InfoItem({ label, value, isFullWidth = false }) {
+      return (
+        <div className={isFullWidth ? 'col-span-2' : ''}>
+          <span className="block text-xs font-medium text-gray-500">{label}</span>
+          <span className="block text-sm font-semibold text-gray-800">{value || 'N/A'}</span>
+        </div>
+      );
+    }
+
+    function FormInput({ label, name, type = 'text', value, onChange, required = false, placeholder, isLabelHidden = false }) {
+      return (
+        <div className="w-full">
+          <label
+            htmlFor={name}
+            className={`block text-sm font-medium text-gray-700 ${isLabelHidden ? 'sr-only' : 'mb-1'}`}
+          >
+            {label} {required && <span className="text-red-500">*</span>}
+          </label>
+          <input
+            type={type}
+            id={name}
+            name={name}
+            value={value}
+            onChange={onChange}
+            required={required}
+            placeholder={placeholder || `Enter ${label.toLowerCase()}...`}
+            className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-150 focus:shadow-md"
+          />
+        </div>
+      );
+    }
+
+    function FullScreenLoader() {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-gray-100">
+          <div className="flex flex-col items-center">
+            <SpinnerIcon className="w-10 h-10 text-blue-600" />
+            <p className="mt-2 text-gray-600">Loading ClinicApp...</p>
+          </div>
+        </div>
+      );
+    }
+
+    // --- SVG Icons (MOVED UP) ---
+
+    const GoogleIcon = () => (
+      <svg className="w-5 h-5" viewBox="0 0 48 48">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+        <path fill="none" d="M0 0h48v48H0z"></path>
+      </svg>
+    );
+
+    const WifiOffIcon = () => (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m-2.828-2.828a5 5 0 010 7.07m-2.829-2.828a1 1 0 010 1.414m-8.485 2.829l14.142-14.142M4.929 4.929l14.142 14.142"></path>
+      </svg>
+    );
+
+    // --- REMOVED CameraIcon ---
+
+    const CloseIcon = () => (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"></path>
+      </svg>
+    );
+
+    const SpinnerIcon = ({ className = "w-5 h-5 text-white" }) => (
+      <svg className={`${className} animate-spin`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+    );
+
+    const ArrowLeftIcon = () => (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+      </svg>
+    );
+
+    const SaveIcon = () => (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+      </svg>
+    );
+
+    const SearchIcon = () => (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+      </svg>
+    );
+
+    const TrashIcon = () => (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+      </svg>
+    );
+
+    /**
+     * NEW: Password Lock Screen
+     */
+    function PasswordLock({ setIsAuthenticated }) {
+      const [passwordInput, setPasswordInput] = useState('');
+      const [error, setError] = useState(null);
+      const correctPassword = '2255'; // The password
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        setError(null);
+        if (passwordInput === correctPassword) {
+          setIsAuthenticated(true);
+        } else {
+          setError('Incorrect Password. Please try again.');
+        }
+      };
+
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-100 to-indigo-200 font-inter">
+          <form 
+            onSubmit={handleSubmit} 
+            className="p-8 bg-white rounded-xl shadow-2xl w-full max-w-sm animate-slideIn"
+          >
+            <h2 className="text-2xl font-bold text-center text-blue-900">ClinicApp Login</h2>
+            <p className="mt-2 text-sm text-center text-gray-600">Please enter the password to access.</p>
+            
+            <div className="mt-6">
+              <FormInput
+                label="Password"
+                name="password"
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="Enter password..."
+                required
+              />
+            </div>
+            
+            {error && (
+              <p className="mt-2 text-sm text-center text-red-600">{error}</p>
+            )}
+
+            <div className="mt-6">
+              <button
+                type="submit"
+                className="w-full flex items-center justify-center px-6 py-3 font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow-lg hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all transform hover:scale-105"
+              >
+                Login
+              </button>
+            </div>
+          </form>
+        </div>
+      );
+    }
+
     /**
      * Main App Component
      */
-    function App() {
+    function ClinicApp() { // <-- RENAMED from App
       const [user, setUser] = useState(null);
       const [isAuthReady, setIsAuthReady] = useState(false);
       const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -673,8 +831,8 @@
      */
     function AlreadyRegisteredModal({ setModal, getCollectionPath, getDocPath, setError }) {
       const [searchTerm, setSearchTerm] = useState('');
-      // --- MODIFIED: Added 'diagnosis' ---
-      const [searchBy, setSearchBy] = useState('phone'); // 'phone', 'name', 'diagnosis'
+      // --- MODIFIED: Added 'diagnosis' and 'date' ---
+      const [searchBy, setSearchBy] = useState('phone'); // 'phone', 'name', 'diagnosis', 'date'
       
       const [loading, setLoading] = useState(false);
       // --- MODIFIED: Search now returns a list of visits ---
@@ -699,6 +857,8 @@
             q = query(collection(db, visitsPath), where('patientPhoneNumber', '==', searchTerm));
           } else if (searchBy === 'name') {
             q = query(collection(db, visitsPath), where('patientName', '==', searchTerm));
+          } else if (searchBy === 'date') { // <-- NEW
+            q = query(collection(db, visitsPath), where('date', '==', searchTerm));
           } else { // searchBy === 'diagnosis'
             q = query(collection(db, visitsPath), where('diagnosis', '==', searchTerm));
           }
@@ -786,6 +946,18 @@
                   />
                   <span className="text-sm font-medium text-gray-700">By Diagnosis</span>
                 </label>
+                {/* --- NEW: Search By Date --- */}
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="searchType"
+                    value="date"
+                    checked={searchBy === 'date'}
+                    onChange={() => setSearchBy('date')}
+                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">By Date</span>
+                </label>
               </div>
 
               <form onSubmit={handleSearch} className="flex mt-2 space-x-2">
@@ -793,12 +965,13 @@
                   name="search"
                   label="Search Term"
                   isLabelHidden={true}
-                  type={searchBy === 'phone' ? 'tel' : 'text'}
+                  type={searchBy === 'phone' ? 'tel' : searchBy === 'date' ? 'date' : 'text'}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder={
                     searchBy === 'phone' ? 'Enter phone number...' : 
                     searchBy === 'name' ? 'Enter full name...' : 
+                    searchBy === 'date' ? '' : // Date input shows its own placeholder
                     'Enter diagnosis or code...'
                   }
                   required
@@ -812,6 +985,8 @@
                   <span className="ml-2">Search</span>
                 </button>
               </form>
+              
+              {/* --- FIX: REMOVED STRAY CODE HERE --- */}
               
               {/* Search Results */}
               <div className="mt-6">
@@ -842,108 +1017,26 @@
       );
     }
 
+    /**
+     * NEW: Root App component to handle password lock
+     */
+    function App() {
+      const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+      if (!isAuthenticated) {
+        // FormInput is now global, so this works
+        return <PasswordLock setIsAuthenticated={setIsAuthenticated} />;
+      }
+      
+      return <ClinicApp />;
+    }
+
 
     // --- Reusable UI Components ---
-
-    function InfoItem({ label, value, isFullWidth = false }) {
-      return (
-        <div className={isFullWidth ? 'col-span-2' : ''}>
-          <span className="block text-xs font-medium text-gray-500">{label}</span>
-          <span className="block text-sm font-semibold text-gray-800">{value || 'N/A'}</span>
-        </div>
-      );
-    }
-
-    function FormInput({ label, name, type = 'text', value, onChange, required = false, placeholder, isLabelHidden = false }) {
-      return (
-        <div className="w-full">
-          <label
-            htmlFor={name}
-            className={`block text-sm font-medium text-gray-700 ${isLabelHidden ? 'sr-only' : 'mb-1'}`}
-          >
-            {label} {required && <span className="text-red-500">*</span>}
-          </label>
-          <input
-            type={type}
-            id={name}
-            name={name}
-            value={value}
-            onChange={onChange}
-            required={required}
-            placeholder={placeholder || `Enter ${label.toLowerCase()}...`}
-            className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-150 focus:shadow-md"
-          />
-        </div>
-      );
-    }
-
-    function FullScreenLoader() {
-      return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100">
-          <div className="flex flex-col items-center">
-            <SpinnerIcon className="w-10 h-10 text-blue-600" />
-            <p className="mt-2 text-gray-600">Loading ClinicApp...</p>
-          </div>
-        </div>
-      );
-    }
+    /* MOVED TO TOP */
 
     // --- SVG Icons ---
-
-    const GoogleIcon = () => (
-      <svg className="w-5 h-5" viewBox="0 0 48 48">
-        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-        <path fill="none" d="M0 0h48v48H0z"></path>
-      </svg>
-    );
-
-    const WifiOffIcon = () => (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m-2.828-2.828a5 5 0 010 7.07m-2.829-2.828a1 1 0 010 1.414m-8.485 2.829l14.142-14.142M4.929 4.929l14.142 14.142"></path>
-      </svg>
-    );
-
-    // --- REMOVED CameraIcon ---
-
-    const CloseIcon = () => (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"></path>
-      </svg>
-    );
-
-    const SpinnerIcon = ({ className = "w-5 h-5 text-white" }) => (
-      <svg className={`${className} animate-spin`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-      </svg>
-    );
-
-    const ArrowLeftIcon = () => (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-      </svg>
-    );
-
-    const SaveIcon = () => (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
-      </svg>
-    );
-
-    const SearchIcon = () => (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-      </svg>
-    );
-
-    const TrashIcon = () => (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-      </svg>
-    );
+    /* MOVED TO TOP */
 
     // --- 5. Mount the App ---
     const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -952,5 +1045,4 @@
   </script>
 </body>
 </html>
-
 
