@@ -37,7 +37,6 @@
   <!-- 4. This script contains your entire React application -->
   <script type="text/babel" data-type="module">
     // --- MODIFIED IMPORTS ---
-    // We import directly from CDN URLs instead of 'firebase/app'
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import {
       getAuth,
@@ -65,7 +64,7 @@
       enableNetwork,
       disableNetwork,
       setLogLevel,
-      deleteDoc // <-- ADD deleteDoc
+      deleteDoc // Added deleteDoc
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import {
       getStorage,
@@ -91,9 +90,7 @@
     };
 
     // --- App-Specific Constants (from instructions) ---
-    // These are placeholders for the Canvas environment
     const globalAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-clinic-app';
-    // Use the config from this file (firebaseConfig) as the primary source
     const globalFirebaseConfig = typeof __firebase_config !== 'undefined'
       ? JSON.parse(__firebase_config)
       : firebaseConfig; 
@@ -103,24 +100,29 @@
     const app = initializeApp(globalFirebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    const storage = getStorage(app);
+    const storage = getStorage(app); // Keep storage init in case of future use
     setLogLevel('Debug'); // Enable Firestore logging
 
+    // --- DOCTORS LIST ---
+    const DOCTORS = [
+      { id: 'dr_rabeeh', name: 'Dr. Rabeeh', prefix: 'RAB' },
+      { id: 'dr_rafida', name: 'Dr. Rafida', prefix: 'RAF' },
+    ];
+
     // --- Utility Functions ---
-    const getTodayDateString = () => {
-      return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const getTodayDateString = (date = new Date()) => {
+      return date.toISOString().split('T')[0]; // YYYY-MM-DD
     };
     
-    // --- NEW Clock Component ---
+    // --- Clock Component ---
     function Clock() {
       const [time, setTime] = useState(new Date());
 
       useEffect(() => {
         const timerId = setInterval(() => {
           setTime(new Date());
-        }, 1000); // Update every second
-
-        return () => clearInterval(timerId); // Cleanup
+        }, 1000);
+        return () => clearInterval(timerId);
       }, []);
 
       const formattedDate = time.toLocaleDateString('en-IN', {
@@ -144,7 +146,6 @@
 
     /**
      * Main App Component
-     * Handles Auth and Navigation
      */
     function App() {
       const [user, setUser] = useState(null);
@@ -154,8 +155,9 @@
       const [modal, setModal] = useState(null); // null, 'alreadyRegistered'
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState(null);
+      // --- NEW: Selected Doctor State ---
+      const [selectedDoctor, setSelectedDoctor] = useState(DOCTORS[0]);
 
-      // Get current User ID, falling back to a random ID for unauthenticated (though we force auth)
       const userId = user?.uid;
 
       // Effect for Authentication
@@ -164,12 +166,10 @@
           if (user) {
             setUser(user);
           } else {
-            // No user found, try to sign in
             try {
               if (globalInitialToken) {
                 await signInWithCustomToken(auth, globalInitialToken);
               } else {
-                // Fallback to anonymous sign-in if no token is provided
                 await signInAnonymously(auth);
               }
             } catch (authError) {
@@ -197,10 +197,7 @@
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
 
-        // Initial check
-        if (isOffline) {
-          handleOffline();
-        }
+        if (isOffline) handleOffline();
 
         return () => {
           window.removeEventListener('online', handleOnline);
@@ -215,7 +212,6 @@
         setError(null);
         try {
           await signInWithPopup(auth, provider);
-          // onAuthStateChanged will handle setting the user
         } catch (err) {
           console.error(err);
           setError("Failed to log in with Google.");
@@ -227,9 +223,8 @@
         setLoading(true);
         try {
           await signOut(auth);
-          setUser(null); // Clear user
-          setPage('home'); // Reset page
-          // Re-authenticate anonymously
+          setUser(null);
+          setPage('home');
           await signInAnonymously(auth);
         } catch (err) {
           console.error(err);
@@ -238,7 +233,7 @@
         setLoading(false);
       };
 
-      // Helper to get Firestore paths scoped to the user
+      // Helper to get Firestore paths
       const getCollectionPath = (collectionName) => {
         if (!userId) throw new Error("User not authenticated.");
         return `artifacts/${globalAppId}/users/${userId}/${collectionName}`;
@@ -249,12 +244,6 @@
         return `artifacts/${globalAppId}/users/${userId}/${collectionName}/${docId}`;
       };
       
-      // Helper to get Storage paths scoped to the user
-      const getStorageBasePath = () => {
-         if (!userId) throw new Error("User not authenticated.");
-         return `prescriptions/${userId}`;
-      }
-
       if (!isAuthReady || loading) {
         return <FullScreenLoader />;
       }
@@ -300,10 +289,25 @@
                   </div>
                 )}
               </div>
-              {/* --- ADDED CLOCK --- */}
-              <div className="flex items-center justify-end mt-2">
+              
+              {/* --- MODIFIED: Doctor Switcher & Clock --- */}
+              <div className="flex items-center justify-between mt-3">
+                <div>
+                  <label htmlFor="doctorSelect" className="sr-only">Select Doctor</label>
+                  <select
+                    id="doctorSelect"
+                    value={selectedDoctor.id}
+                    onChange={(e) => setSelectedDoctor(DOCTORS.find(d => d.id === e.target.value))}
+                    className="block w-full py-1.5 pl-3 pr-8 text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {DOCTORS.map(doc => (
+                      <option key={doc.id} value={doc.id}>{doc.name}</option>
+                    ))}
+                  </select>
+                </div>
                  <Clock />
               </div>
+
               {error && <div className="p-2 mt-2 text-center text-red-800 bg-red-100 rounded-md">{error}</div>}
             </header>
 
@@ -316,9 +320,9 @@
                   setPage={setPage}
                   setModal={setModal}
                   getCollectionPath={getCollectionPath}
-                  getStorageBasePath={getStorageBasePath}
+                  getDocPath={getDocPath}
                   setError={setError}
-                  getDocPath={getDocPath} // <-- ADD THIS
+                  selectedDoctor={selectedDoctor} // Pass doctor
                 />
               ) : page === 'newOP' ? (
                 <NewPatientForm
@@ -326,6 +330,7 @@
                   getCollectionPath={getCollectionPath}
                   getDocPath={getDocPath}
                   setError={setError}
+                  selectedDoctor={selectedDoctor} // Pass doctor
                 />
               ) : null}
             </main>
@@ -346,7 +351,6 @@
 
     /**
      * AuthGate: Shown when user is not logged in.
-     * Note: App logic forces anonymous login, so this is a fallback / initial login.
      */
     function AuthGate({ onLogin, loading }) {
       return (
@@ -368,9 +372,11 @@
     /**
      * HomePage: Main dashboard
      */
-    function HomePage({ setPage, setModal, getCollectionPath, getStorageBasePath, setError, getDocPath }) { // <-- ADD getDocPath
+    function HomePage({ setPage, setModal, getCollectionPath, getDocPath, setError, selectedDoctor }) {
       const [todaysVisits, setTodaysVisits] = useState([]);
       const [loading, setLoading] = useState(true);
+      // --- NEW: Diagnosis Filter State ---
+      const [diagnosisFilter, setDiagnosisFilter] = useState('');
 
       useEffect(() => {
         setLoading(true);
@@ -378,7 +384,13 @@
         try {
           const today = getTodayDateString();
           const visitsPath = getCollectionPath('visits');
-          const q = query(collection(db, visitsPath), where('date', '==', today));
+          
+          // --- MODIFIED: Query includes doctor ---
+          const q = query(
+            collection(db, visitsPath), 
+            where('date', '==', today),
+            where('doctor.id', '==', selectedDoctor.id)
+          );
 
           unsubscribe = onSnapshot(
             q,
@@ -403,7 +415,18 @@
         }
 
         return () => unsubscribe && unsubscribe();
-      }, [getCollectionPath, setError]);
+      }, [getCollectionPath, setError, selectedDoctor]); // Re-run query if doctor changes
+
+      // --- NEW: Filtered Visits Logic ---
+      const filteredVisits = useMemo(() => {
+        if (!diagnosisFilter) {
+          return todaysVisits; // No filter applied
+        }
+        return todaysVisits.filter(visit => 
+          (visit.diagnosis && visit.diagnosis.toLowerCase().includes(diagnosisFilter.toLowerCase())) ||
+          (visit.diagnosisCode && visit.diagnosisCode.toLowerCase().includes(diagnosisFilter.toLowerCase()))
+        );
+      }, [todaysVisits, diagnosisFilter]);
 
       return (
         <div className="space-y-6">
@@ -423,23 +446,39 @@
           </div>
 
           <div>
-            <h2 className="pb-2 text-2xl font-bold text-gray-800 border-b-2 border-blue-100">Today's Registered Patients List</h2>
+            <div className="pb-2 border-b-2 border-blue-100">
+              <h2 className="text-2xl font-bold text-gray-800">Today's List</h2>
+              
+              {/* --- NEW: Diagnosis Filter Input --- */}
+              <div className="mt-4">
+                <FormInput
+                  name="diagnosisFilter"
+                  label="Filter by Diagnosis"
+                  isLabelHidden={true}
+                  value={diagnosisFilter}
+                  onChange={(e) => setDiagnosisFilter(e.target.value)}
+                  placeholder="Filter by Diagnosis or Code..."
+                />
+              </div>
+            </div>
+
             {loading ? (
               <div className="mt-4 space-y-4">
                 <div className="w-full h-32 p-4 bg-gray-100 rounded-lg shadow-inner animate-pulse-light"></div>
                 <div className="w-full h-32 p-4 bg-gray-100 rounded-lg shadow-inner animate-pulse-light"></div>
               </div>
-            ) : todaysVisits.length === 0 ? (
-              <p className="p-6 mt-4 text-center text-gray-600 bg-gray-50 rounded-lg">No patients registered yet today.</p>
+            ) : filteredVisits.length === 0 ? (
+              <p className="p-6 mt-4 text-center text-gray-600 bg-gray-50 rounded-lg">
+                {todaysVisits.length > 0 && diagnosisFilter ? 'No patients match this filter.' : 'No patients registered yet today.'}
+              </p>
             ) : (
               <div className="mt-4 space-y-4">
-                {todaysVisits.map((visit) => (
+                {filteredVisits.map((visit) => (
                   <PatientCard 
                     key={visit.id} 
                     visit={visit} 
-                    getStorageBasePath={getStorageBasePath} 
+                    getDocPath={getDocPath}
                     setError={setError}
-                    getDocPath={getDocPath} // <-- ADD THIS
                   />
                 ))}
               </div>
@@ -452,111 +491,16 @@
     /**
      * PatientCard: Displays info for a single patient visit
      */
-    function PatientCard({ visit, getStorageBasePath, setError, getDocPath }) { // <-- ADD getDocPath
-      const [prescriptions, setPrescriptions] = useState(visit.prescriptions || []);
-      const [isUploading, setIsUploading] = useState(false);
-      const fileInputRef = React.useRef(null);
-
-      // Update prescriptions if visit prop changes (e.g., from an upload)
-      useEffect(() => {
-        setPrescriptions(visit.prescriptions || []);
-      }, [visit.prescriptions]);
-
-      const handleUploadClick = () => {
-        fileInputRef.current.click();
-      };
-
-      const handleFileChange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        setIsUploading(true);
-        setError(null);
-        try {
-          // Create storage ref
-          const storagePath = `${getStorageBasePath()}/${visit.patientPhoneNumber}/${visit.id}/${Date.now()}_${file.name}`;
-          const storageRef = ref(storage, storagePath);
-
-          // Upload file
-          const snapshot = await uploadBytes(storageRef, file);
-          
-          // Get download URL
-          const downloadURL = await getDownloadURL(snapshot.ref);
-
-          // Create prescription object
-          const newPrescription = {
-            fullPath: snapshot.ref.fullPath,
-            downloadURL: downloadURL,
-            fileName: file.name,
-            uploadedAt: new Date().toISOString(),
-          };
-
-          // Update Firestore document
-          const visitDocRef = doc(db, visit.path.split('/').slice(0, -2).join('/'), 'visits', visit.id);
-          await updateDoc(visitDocRef, {
-            prescriptions: arrayUnion(newPrescription),
-          });
-          
-          // State is updated via onSnapshot listener in parent
-          // but we can add it here for immediate UI feedback
-          setPrescriptions(prev => [...prev, newPrescription]);
-
-        } catch (err) {
-          console.error("Error uploading file:", err);
-          setError("Failed to upload prescription. Please try again.");
-        }
-        setIsUploading(false);
-      };
-
-      const handleDeleteImage = async (prescriptionToDelete) => {
-        // Use a custom modal instead of window.confirm
-        if (!confirm("Are you sure you want to delete this prescription image?")) {
-          // NOTE: In a real app, replace confirm() with a custom modal.
-          // For this example, we'll use the browser's confirm.
-          return;
-        }
-        
-        setError(null);
-        try {
-          // 1. Delete from Storage
-          const imageRef = ref(storage, prescriptionToDelete.fullPath);
-          await deleteObject(imageRef);
-
-          // 2. Delete from Firestore
-          const visitDocRef = doc(db, visit.path.split('/').slice(0, -2).join('/'), 'visits', visit.id);
-          await updateDoc(visitDocRef, {
-            prescriptions: arrayRemove(prescriptionToDelete),
-          });
-
-          // State is updated via onSnapshot listener in parent
-          // but we can remove it here for immediate UI feedback
-          setPrescriptions(prev => prev.filter(p => p.fullPath !== prescriptionToDelete.fullPath));
-          
-        } catch (err) {
-            console.error("Error deleting image:", err);
-            setError("Failed to delete image. Please try again.");
-        }
-      };
-
+    function PatientCard({ visit, getDocPath, setError }) {
+      
       const handleDeleteVisit = async () => {
-        // Use confirm for simplicity. Replace with a custom modal in a real app.
-        if (!confirm(`Are you sure you want to delete the visit for ${visit.patientName}? This will also delete all associated prescriptions and cannot be undone.`)) {
+        if (!confirm(`Are you sure you want to delete the visit for ${visit.patientName}? This cannot be undone.`)) {
           return;
         }
 
         setError(null);
         try {
-          // 1. Delete all associated prescription images from Storage
-          if (visit.prescriptions && visit.prescriptions.length > 0) {
-            // Use Promise.all to delete all images in parallel
-            const deletePromises = visit.prescriptions.map(img => {
-              const imageRef = ref(storage, img.fullPath);
-              return deleteObject(imageRef);
-            });
-            await Promise.all(deletePromises);
-          }
-
-          // 2. Delete the visit document from Firestore
+          // No images to delete, just delete the Firestore doc
           const visitDocRef = doc(db, getDocPath('visits', visit.id));
           await deleteDoc(visitDocRef);
           
@@ -570,7 +514,6 @@
 
       return (
         <div className="relative p-4 bg-white border border-blue-100 rounded-xl shadow-lg transition-all hover:shadow-xl">
-          {/* --- ADDED DELETE BUTTON --- */}
           <button
             onClick={handleDeleteVisit}
             className="absolute top-2 right-2 p-1.5 text-gray-400 bg-gray-100 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors"
@@ -580,65 +523,20 @@
           </button>
           
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 pr-8"> {/* Added pr-8 to avoid overlap */}
+            {/* --- MODIFIED: Added Reg Code --- */}
+            <InfoItem label="Reg. Code" value={visit.registrationCode} isFullWidth={true} />
             <InfoItem label="Name" value={visit.patientName} />
             <InfoItem label="Age" value={visit.patientAge} />
             <InfoItem label="Phone" value={visit.patientPhoneNumber} />
             <InfoItem label="Place" value={visit.patientPlace} />
-            {/* --- ADDED DATE ITEM --- */}
             <InfoItem label="Date" value={visit.date} />
             <InfoItem label="Time" value={visit.time || 'N/A'} />
+            {/* --- MODIFIED: Added Diagnosis Info --- */}
+            <InfoItem label="Diagnosis" value={visit.diagnosis} />
+            <InfoItem label="Diag. Code" value={visit.diagnosisCode} />
           </div>
 
-          {/* Prescription Gallery */}
-          <div className="mt-4">
-            <h4 className="text-lg font-semibold text-blue-800">Prescriptions:</h4>
-            {prescriptions.length === 0 ? (
-              <p className="text-sm text-gray-500">No prescriptions uploaded.</p>
-            ) : (
-              <div className="grid grid-cols-3 gap-2 mt-2">
-                {prescriptions.map((img) => (
-                  <div key={img.fullPath} className="relative overflow-hidden rounded-lg shadow-md group">
-                    <a href={img.downloadURL} target="_blank" rel="noopener noreferrer">
-                      <img
-                        src={img.downloadURL}
-                        alt={img.fileName}
-                        className="object-cover w-full h-24 bg-gray-200 rounded-lg transition-transform duration-300 group-hover:scale-110"
-                        onError={(e) => { e.target.src = 'https://placehold.co/100x100/FEE2E2/B91C1C?text=Error'; }}
-                      />
-                    </a>
-                    <button
-                      onClick={() => handleDeleteImage(img)}
-                      className="absolute top-0 right-0 p-1 text-white bg-red-600/80 backdrop-blur-sm rounded-full shadow-md opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all"
-                      style={{ transform: 'translate(30%, -30%)' }}
-                    >
-                      <CloseIcon />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          {/* Upload Button */}
-          <div className="mt-4">
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              disabled={isUploading}
-            />
-            <button
-              onClick={handleUploadClick}
-              disabled={isUploading}
-              className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-md shadow-md hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 transition-all transform hover:scale-105"
-            >
-              {isUploading ? <SpinnerIcon className="w-5 h-5 text-white" /> : <CameraIcon />}
-              <span className="ml-2">{isUploading ? 'Uploading...' : 'Upload Prescription'}</span>
-            </button>
-          </div>
+          {/* --- REMOVED Prescription Gallery & Upload Button --- */}
         </div>
       );
     }
@@ -646,18 +544,30 @@
     /**
      * NewPatientForm: Page for registering a new OP
      */
-    function NewPatientForm({ setPage, getCollectionPath, getDocPath, setError }) {
+    function NewPatientForm({ setPage, getCollectionPath, getDocPath, setError, selectedDoctor }) {
       const [formData, setFormData] = useState({
         name: '',
         age: '',
         phone: '',
         place: '',
+        diagnosis: '',
+        diagnosisCode: '',
       });
       const [loading, setLoading] = useState(false);
 
       const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
+      };
+
+      // --- NEW: Generate Registration Code ---
+      const generateRegCode = () => {
+        const prefix = selectedDoctor.prefix.toUpperCase();
+        const now = new Date();
+        const dd = String(now.getDate()).padStart(2, '0');
+        const mm = String(now.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+        const yy = String(now.getFullYear()).slice(-2);
+        return `${prefix}${dd}${mm}${yy}`;
       };
 
       const handleSubmit = async (e) => {
@@ -671,7 +581,7 @@
         setError(null);
         
         try {
-          const { name, age, phone, place } = formData;
+          const { name, age, phone, place, diagnosis, diagnosisCode } = formData;
           const patientData = {
             name,
             age: Number(age) || null,
@@ -693,15 +603,19 @@
             patientName: name,
             patientAge: Number(age) || null,
             patientPlace: place,
-            prescriptions: [],
-            path: patientPath // Store path for easier reference
+            path: patientPath,
+            // --- NEW: Added Doctor, Reg Code, Diagnosis ---
+            doctor: selectedDoctor, // Save the full doctor object
+            registrationCode: generateRegCode(),
+            diagnosis: diagnosis || null,
+            diagnosisCode: diagnosisCode || null,
           };
           
           const visitsPath = getCollectionPath('visits');
           await addDoc(collection(db, visitsPath), visitData);
 
           // Success
-          setFormData({ name: '', age: '', phone: '', place: '' }); // Clear form
+          setFormData({ name: '', age: '', phone: '', place: '', diagnosis: '', diagnosisCode: '' }); // Clear form
           setPage('home'); // Go back home
 
         } catch (err) {
@@ -724,6 +638,12 @@
             <FormInput name="age" label="Age" type="number" value={formData.age} onChange={handleChange} />
             <FormInput name="phone" label="Phone Number" type="tel" value={formData.phone} onChange={handleChange} required />
             <FormInput name="place" label="House Name or Place" value={formData.place} onChange={handleChange} />
+            
+            {/* --- NEW: Diagnosis Fields --- */}
+            <div className="pt-4 border-t border-gray-200">
+              <FormInput name="diagnosis" label="Diagnosis" value={formData.diagnosis} onChange={handleChange} />
+            </div>
+            <FormInput name="diagnosisCode" label="Diagnosis Code" value={formData.diagnosisCode} onChange={handleChange} />
             
             <div className="flex justify-end pt-2">
               <button
@@ -752,12 +672,12 @@
      * AlreadyRegisteredModal: Popup to search for a patient
      */
     function AlreadyRegisteredModal({ setModal, getCollectionPath, getDocPath, setError }) {
-      // --- MODIFIED: Renamed state ---
       const [searchTerm, setSearchTerm] = useState('');
-      const [searchBy, setSearchBy] = useState('phone'); // 'phone' or 'name'
+      // --- MODIFIED: Added 'diagnosis' ---
+      const [searchBy, setSearchBy] = useState('phone'); // 'phone', 'name', 'diagnosis'
       
       const [loading, setLoading] = useState(false);
-      const [patientData, setPatientData] = useState(null); // Holds a single matched patient
+      // --- MODIFIED: Search now returns a list of visits ---
       const [visitHistory, setVisitHistory] = useState([]);
       const [notFound, setNotFound] = useState(false);
       
@@ -767,52 +687,39 @@
         
         setLoading(true);
         setError(null);
-        setPatientData(null);
         setVisitHistory([]);
         setNotFound(false);
         
         try {
-          let foundPatient = null;
-          let patientPhone = null;
+          const visitsPath = getCollectionPath('visits');
+          let q;
 
+          // --- MODIFIED: Build query based on search type ---
           if (searchBy === 'phone') {
-            // 1. Search by Phone (as document ID)
-            const patientPath = getDocPath('patients', searchTerm);
-            const patientDoc = await getDoc(doc(db, patientPath));
-            
-            if (patientDoc.exists()) {
-              foundPatient = { id: patientDoc.id, ...patientDoc.data() };
-              patientPhone = foundPatient.phone;
-            }
-          } else {
-            // 2. Search by Name (exact match, takes first result)
-            const patientsPath = getCollectionPath('patients');
-            const q = query(collection(db, patientsPath), where('name', '==', searchTerm));
-            const querySnapshot = await getDocs(q);
-            
-            if (!querySnapshot.empty) {
-              const firstMatch = querySnapshot.docs[0];
-              foundPatient = { id: firstMatch.id, ...firstMatch.data() };
-              patientPhone = foundPatient.phone;
-            }
+            q = query(collection(db, visitsPath), where('patientPhoneNumber', '==', searchTerm));
+          } else if (searchBy === 'name') {
+            q = query(collection(db, visitsPath), where('patientName', '==', searchTerm));
+          } else { // searchBy === 'diagnosis'
+            q = query(collection(db, visitsPath), where('diagnosis', '==', searchTerm));
           }
-
-          // 3. Process results
-          if (foundPatient && patientPhone) {
-            setPatientData(foundPatient);
-            
-            // Get visit history for the found patient's phone number
-            const visitsPath = getCollectionPath('visits');
-            const visitsQ = query(collection(db, visitsPath), where('patientPhoneNumber', '==', patientPhone));
-            const visitsSnapshot = await getDocs(visitsQ);
-            
-            const visits = visitsSnapshot.docs
-              .map(doc => ({ id: doc.id, ...doc.data() }))
-              .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
-              
-            setVisitHistory(visits);
+          
+          const visitsSnapshot = await getDocs(q);
+          
+          if (visitsSnapshot.empty) {
+            // Try searching diagnosis code if diagnosis fails
+            if (searchBy === 'diagnosis') {
+              const codeQuery = query(collection(db, visitsPath), where('diagnosisCode', '==', searchTerm));
+              const codeSnapshot = await getDocs(codeQuery);
+              if (codeSnapshot.empty) {
+                setNotFound(true);
+              } else {
+                processSnapshot(codeSnapshot);
+              }
+            } else {
+              setNotFound(true);
+            }
           } else {
-            setNotFound(true);
+            processSnapshot(visitsSnapshot);
           }
           
         } catch (err) {
@@ -821,41 +728,15 @@
         }
         setLoading(false);
       };
-      
-      const handleGenerateNewOP = async () => {
-        if (!patientData) return;
-        
-        setLoading(true);
-        setError(null);
-        
-        try {
-          const { name, age, phone, place } = patientData;
-          
-          // Create a new Visit record
-          const today = getTodayDateString();
-          const visitData = {
-            date: today,
-            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-            patientPhoneNumber: phone,
-            patientName: name,
-            patientAge: age,
-            patientPlace: place,
-            prescriptions: [],
-            path: getDocPath('patients', phone) // Store path for reference
-          };
-          
-          const visitsPath = getCollectionPath('visits');
-          await addDoc(collection(db, visitsPath), visitData);
 
-          // Success
-          setModal(null); // Close modal
-          
-        } catch (err) {
-          console.error("Error creating new OP:", err);
-          setError("Failed to create new visit. Please try again.");
-        }
-        setLoading(false);
+      const processSnapshot = (snapshot) => {
+        const visits = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
+        setVisitHistory(visits);
       };
+      
+      // --- REMOVED handleGenerateNewOP ---
 
       return (
         <div className="fixed inset-0 z-20 flex items-start justify-center p-4 pt-16 bg-black bg-opacity-50 backdrop-blur-sm">
@@ -868,10 +749,10 @@
             </button>
             
             <div className="p-6">
-              <h3 className="text-xl font-bold text-blue-900">Find Registered Patient</h3>
+              <h3 className="text-xl font-bold text-blue-900">Find Patient History</h3>
               
-              {/* --- SEARCH TYPE TOGGLE --- */}
-              <div className="flex gap-4 my-4">
+              {/* --- MODIFIED: Search Type Toggle --- */}
+              <div className="flex flex-wrap gap-4 my-4">
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
                     type="radio"
@@ -894,6 +775,17 @@
                   />
                   <span className="text-sm font-medium text-gray-700">By Name (Exact)</span>
                 </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="searchType"
+                    value="diagnosis"
+                    checked={searchBy === 'diagnosis'}
+                    onChange={() => setSearchBy('diagnosis')}
+                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">By Diagnosis</span>
+                </label>
               </div>
 
               <form onSubmit={handleSearch} className="flex mt-2 space-x-2">
@@ -904,7 +796,11 @@
                   type={searchBy === 'phone' ? 'tel' : 'text'}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder={searchBy === 'phone' ? 'Enter phone number...' : 'Enter full name...'}
+                  placeholder={
+                    searchBy === 'phone' ? 'Enter phone number...' : 
+                    searchBy === 'name' ? 'Enter full name...' : 
+                    'Enter diagnosis or code...'
+                  }
                   required
                 />
                 <button
@@ -920,39 +816,23 @@
               {/* Search Results */}
               <div className="mt-6">
                 {notFound && (
-                  <p className="p-6 text-center text-gray-600 bg-gray-100 rounded-lg">No patient found with this {searchBy}.</p>
+                  <p className="p-6 text-center text-gray-600 bg-gray-100 rounded-lg">No visits found for this {searchBy}.</p>
                 )}
-                {patientData && (
+                
+                {/* --- MODIFIED: Show list of visits --- */}
+                {visitHistory.length > 0 && (
                   <div className="p-4 space-y-4 bg-gradient-to-br from-blue-50 to-white rounded-lg shadow-inner">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                       <div>
-                          <h4 className="text-xl font-bold text-blue-900">{patientData.name}</h4>
-                          <p className="text-gray-600">{patientData.phone} | Age: {patientData.age} | {patientData.place}</p>
-                       </div>
-                       <button
-                        onClick={handleGenerateNewOP}
-                        disabled={loading}
-                        className="flex-shrink-0 px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-500 to-emerald-600 rounded-md shadow-md hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 transition-all transform hover:scale-105"
-                       >
-                         Generate New OP
-                       </button>
+                    <h5 className="w-full text-lg font-semibold text-blue-800">Visit History ({visitHistory.length})</h5>
+                    <div className="space-y-4">
+                      {visitHistory.map(visit => (
+                         <PatientCard 
+                            key={visit.id} 
+                            visit={visit} 
+                            getDocPath={getDocPath}
+                            setError={setError}
+                          />
+                      ))}
                     </div>
-                    
-                    <h5 className="w-full pt-4 text-lg font-semibold text-blue-800 border-t-2 border-blue-100">Visit History</h5>
-                    {visitHistory.length === 0 ? (
-                      <p className="text-gray-500">No visit history found.</p>
-                    ) : (
-                      <div className="space-y-4">
-                        {visitHistory.map(visit => (
-                           <PatientCard 
-                              key={visit.id} 
-                              visit={visit} 
-                              getStorageBasePath={() => `prescriptions/${auth.currentUser.uid}`}
-                              setError={setError}
-                            />
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -1026,12 +906,7 @@
       </svg>
     );
 
-    const CameraIcon = () => (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-      </svg>
-    );
+    // --- REMOVED CameraIcon ---
 
     const CloseIcon = () => (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -1064,7 +939,6 @@
       </svg>
     );
 
-    {/* --- ADDED TRASH ICON --- */}
     const TrashIcon = () => (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -1072,7 +946,6 @@
     );
 
     // --- 5. Mount the App ---
-    // This code finds the <div id="root"> and renders your <App /> component inside it.
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
 
